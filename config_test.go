@@ -22,6 +22,12 @@ import (
 	"testing"
 )
 
+const (
+	testAppFile    = "app.yaml"
+	testChartRepo  = "org/chart"
+	testAppContent = "# artifacthub: " + testChartRepo + "\nkind: Application"
+)
+
 func TestDiscoverCharts(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -34,11 +40,11 @@ func TestDiscoverCharts(t *testing.T) {
 		{
 			name: "single chart with comment",
 			files: map[string]string{
-				"app.yaml": "# artifacthub: org/chart\napiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: test",
+				testAppFile: testAppContent + "\nmetadata:\n  name: test",
 			},
 			wantCount: 1,
 			wantCharts: []ChartInfo{
-				{File: "app.yaml", Repo: "org/chart"},
+				{File: testAppFile, Repo: testChartRepo},
 			},
 		},
 		{
@@ -52,7 +58,7 @@ func TestDiscoverCharts(t *testing.T) {
 		{
 			name: "file without comment is skipped",
 			files: map[string]string{
-				"app.yaml": "kind: Application\nmetadata:\n  name: test",
+				testAppFile: "kind: Application\nmetadata:\n  name: test",
 			},
 			wantCount: 0,
 		},
@@ -66,7 +72,7 @@ func TestDiscoverCharts(t *testing.T) {
 		{
 			name: "mixed files",
 			files: map[string]string{
-				"app.yaml":    "# artifacthub: org/chart\nkind: Application",
+				testAppFile:    testAppContent,
 				"deploy.yaml": "kind: Deployment",
 				"secret.yaml": "kind: Secret",
 			},
@@ -75,14 +81,14 @@ func TestDiscoverCharts(t *testing.T) {
 		{
 			name: "yml extension supported",
 			files: map[string]string{
-				"app.yml": "# artifacthub: org/chart\nkind: Application",
+				"app.yml": testAppContent,
 			},
 			wantCount: 1,
 		},
 		{
 			name: "multi-document with Application",
 			files: map[string]string{
-				"app.yaml": "# artifacthub: org/chart\nkind: Application\n---\nkind: Secret",
+				testAppFile: testAppContent + "\n---\nkind: Secret",
 			},
 			wantCount: 1,
 		},
@@ -170,8 +176,8 @@ func TestExtractArtifactHubRepo(t *testing.T) {
 	}{
 		{
 			name:    "comment at start",
-			content: "# artifacthub: org/chart\nkind: Application",
-			want:    "org/chart",
+			content: testAppContent,
+			want:    testChartRepo,
 		},
 		{
 			name:    "no comment",
@@ -181,7 +187,7 @@ func TestExtractArtifactHubRepo(t *testing.T) {
 		{
 			name:    "comment with extra spaces",
 			content: "# artifacthub:   org/chart  \nkind: Application",
-			want:    "org/chart",
+			want:    testChartRepo,
 		},
 		{
 			name:    "wrong comment prefix",
