@@ -1,4 +1,4 @@
-# chart_update_version
+# chart_version_updater
 
 A CLI tool that automatically updates Helm chart versions in Argo CD Application manifests by fetching the latest stable versions from [ArtifactHub](https://artifacthub.io/).
 
@@ -20,7 +20,7 @@ This tool solves the problem of keeping Helm chart versions up-to-date across mu
 ```bash
 # Clone and build
 git clone <repo-url>
-cd chart_update_version
+cd chart_version_updater
 make build
 ```
 

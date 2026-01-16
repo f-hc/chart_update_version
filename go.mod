@@ -1,4 +1,4 @@
-module chart_update_version
+module github.com/f-hc/chart_version_updater
 
 go 1.25.6
 
