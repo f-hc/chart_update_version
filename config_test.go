@@ -90,19 +90,12 @@ func TestDiscoverCharts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create test directory
 			testDir := filepath.Join(tmpDir, tt.name)
 			if err := os.Mkdir(testDir, 0755); err != nil {
 				t.Fatal(err)
 			}
 
-			// Create test files
-			for name, content := range tt.files {
-				path := filepath.Join(testDir, name)
-				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-					t.Fatal(err)
-				}
-			}
+			createTestFiles(t, testDir, tt.files)
 
 			charts, err := discoverCharts(testDir)
 			if err != nil {
@@ -110,25 +103,36 @@ func TestDiscoverCharts(t *testing.T) {
 				return
 			}
 
-			if len(charts) != tt.wantCount {
-				t.Errorf("discoverCharts() found %d charts, want %d", len(charts), tt.wantCount)
-			}
-
-			if tt.wantCharts != nil {
-				for _, want := range tt.wantCharts {
-					found := false
-					for _, got := range charts {
-						if got.File == want.File && got.Repo == want.Repo {
-							found = true
-							break
-						}
-					}
-					if !found {
-						t.Errorf("discoverCharts() missing expected chart %+v", want)
-					}
-				}
-			}
+			checkDiscoveredCharts(t, charts, tt.wantCount, tt.wantCharts)
 		})
+	}
+}
+
+func createTestFiles(t *testing.T, dir string, files map[string]string) {
+	for name, content := range files {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func checkDiscoveredCharts(t *testing.T, got []ChartInfo, wantCount int, wantCharts []ChartInfo) {
+	if len(got) != wantCount {
+		t.Errorf("discoverCharts() found %d charts, want %d", len(got), wantCount)
+	}
+
+	for _, want := range wantCharts {
+		found := false
+		for _, g := range got {
+			if g.File == want.File && g.Repo == want.Repo {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("discoverCharts() missing expected chart %+v", want)
+		}
 	}
 }
 

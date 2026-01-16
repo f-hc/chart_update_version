@@ -58,28 +58,32 @@ func TestReadYAMLDocuments(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(tmpDir, tt.name+".yaml")
-			if err := os.WriteFile(path, []byte(tt.content), 0644); err != nil {
-				t.Fatal(err)
-			}
-
-			docs, err := readYAMLDocuments(path)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("readYAMLDocuments() error = nil, want error")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("readYAMLDocuments() error = %v", err)
-				return
-			}
-
-			if len(docs) != tt.wantDocs {
-				t.Errorf("readYAMLDocuments() got %d docs, want %d", len(docs), tt.wantDocs)
-			}
+			runReadYAMLDocumentsTest(t, path, tt.content, tt.wantDocs, tt.wantErr)
 		})
+	}
+}
+
+func runReadYAMLDocumentsTest(t *testing.T, path, content string, wantDocs int, wantErr bool) {
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	docs, err := readYAMLDocuments(path)
+
+	if wantErr {
+		if err == nil {
+			t.Error("readYAMLDocuments() error = nil, want error")
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("readYAMLDocuments() error = %v", err)
+		return
+	}
+
+	if len(docs) != wantDocs {
+		t.Errorf("readYAMLDocuments() got %d docs, want %d", len(docs), wantDocs)
 	}
 }
 

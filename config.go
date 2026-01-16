@@ -53,41 +53,47 @@ func discoverCharts(dir string) ([]ChartInfo, error) {
 	var charts []ChartInfo
 
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-			continue
-		}
-
-		path := filepath.Join(dir, name)
-
-		// Verify path doesn't escape directory (safety check)
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			continue
-		}
-		if !strings.HasPrefix(absPath, absDir+string(os.PathSeparator)) && absPath != absDir {
-			continue
-		}
-
-		repo, err := extractArtifactHubRepo(path)
-		if err != nil {
-			// Skip files that can't be parsed
-			continue
-		}
-
-		if repo != "" {
+		if repo := getArtifactHubRepoFromEntry(dir, absDir, entry); repo != "" {
 			charts = append(charts, ChartInfo{
-				File: name,
+				File: entry.Name(),
 				Repo: repo,
 			})
 		}
 	}
 
 	return charts, nil
+}
+
+// getArtifactHubRepoFromEntry checks if a directory entry is an ArgoCD Application
+// with an ArtifactHub repo comment and returns the repo path if found.
+func getArtifactHubRepoFromEntry(dir, absDir string, entry os.DirEntry) string {
+	if entry.IsDir() {
+		return ""
+	}
+
+	name := entry.Name()
+	if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+		return ""
+	}
+
+	path := filepath.Join(dir, name)
+
+	// Verify path doesn't escape directory (safety check)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	if !strings.HasPrefix(absPath, absDir+string(os.PathSeparator)) && absPath != absDir {
+		return ""
+	}
+
+	repo, err := extractArtifactHubRepo(path)
+	if err != nil {
+		// Skip files that can't be parsed
+		return ""
+	}
+
+	return repo
 }
 
 // extractArtifactHubRepo reads a YAML file and extracts the ArtifactHub repo

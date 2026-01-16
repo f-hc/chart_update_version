@@ -87,38 +87,42 @@ func TestArtifactHubLatestVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create test server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(tt.statusCode)
-				if _, err := w.Write([]byte(tt.response)); err != nil {
-					t.Errorf("failed to write response: %v", err)
-				}
-			}))
-			defer server.Close()
-
-			// Override the API URL for testing
-			oldAPI := artifactHubAPI
-			defer func() { setArtifactHubAPI(oldAPI) }()
-			setArtifactHubAPI(server.URL)
-
-			ver, err := artifactHubLatestVersion("test/repo")
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("artifactHubLatestVersion() error = nil, want error")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("artifactHubLatestVersion() error = %v", err)
-				return
-			}
-
-			if ver != tt.wantVer {
-				t.Errorf("artifactHubLatestVersion() = %q, want %q", ver, tt.wantVer)
-			}
+			runArtifactHubTest(t, tt.response, tt.statusCode, tt.wantVer, tt.wantErr)
 		})
+	}
+}
+
+func runArtifactHubTest(t *testing.T, response string, statusCode int, wantVer string, wantErr bool) {
+	// Create test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(statusCode)
+		if _, err := w.Write([]byte(response)); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	// Override the API URL for testing
+	oldAPI := artifactHubAPI
+	defer func() { setArtifactHubAPI(oldAPI) }()
+	setArtifactHubAPI(server.URL)
+
+	ver, err := artifactHubLatestVersion("test/repo")
+
+	if wantErr {
+		if err == nil {
+			t.Error("artifactHubLatestVersion() error = nil, want error")
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("artifactHubLatestVersion() error = %v", err)
+		return
+	}
+
+	if ver != wantVer {
+		t.Errorf("artifactHubLatestVersion() = %q, want %q", ver, wantVer)
 	}
 }
 
