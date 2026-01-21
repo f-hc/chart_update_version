@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -29,24 +30,30 @@ func readYAMLDocuments(path string) (docs []*yaml.Node, err error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if closeErr := f.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
+	defer closeFile(f, &err)
 
-	dec := yaml.NewDecoder(f)
-	for {
-		var n yaml.Node
-		if err := dec.Decode(&n); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-		docs = append(docs, &n)
+	return decodeStream(yaml.NewDecoder(f))
+}
+
+func closeFile(c io.Closer, err *error) {
+	if closeErr := c.Close(); closeErr != nil && *err == nil {
+		*err = closeErr
 	}
-	return docs, nil
+}
+
+func decodeStream(dec *yaml.Decoder) ([]*yaml.Node, error) {
+	var n yaml.Node
+	if err := dec.Decode(&n); err != nil {
+		if err == io.EOF {
+			return nil, nil
+		}
+		return nil, err
+	}
+	rest, err := decodeStream(dec)
+	if err != nil {
+		return nil, err
+	}
+	return append([]*yaml.Node{&n}, rest...), nil
 }
 
 func writeYAMLDocuments(path string, docs []*yaml.Node) (err error) {
@@ -54,21 +61,70 @@ func writeYAMLDocuments(path string, docs []*yaml.Node) (err error) {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if closeErr := f.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
+	defer closeFile(f, &err)
 
 	enc := yaml.NewEncoder(f)
 	enc.SetIndent(2)
+	defer closeFile(enc, &err)
 
-	for _, d := range docs {
-		if err := enc.Encode(d); err != nil {
-			return err
+	nodes := docs
+	if len(docs) > 0 {
+		first, comment := extractComment(docs[0])
+		if comment != "" {
+			if _, err := fmt.Fprintf(f, "%s\n---\n", comment); err != nil {
+				return err
+			}
+			nodes = append([]*yaml.Node{first}, docs[1:]...)
 		}
 	}
-	return nil
+
+	return encodeStream(enc, nodes)
+}
+
+func extractComment(n *yaml.Node) (*yaml.Node, string) {
+	root := docRoot(n)
+	if root.Kind != yaml.MappingNode || len(root.Content) == 0 {
+		return n, ""
+	}
+
+	firstKey := root.Content[0]
+	if !strings.HasPrefix(firstKey.HeadComment, artifactHubPrefix) {
+		return n, ""
+	}
+
+	comment := firstKey.HeadComment
+
+	// Clone the structure to modify it safely
+	newFirstKey := *firstKey
+	newFirstKey.HeadComment = ""
+
+	newContent := make([]*yaml.Node, len(root.Content))
+	copy(newContent, root.Content)
+	newContent[0] = &newFirstKey
+
+	newRoot := *root
+	newRoot.Content = newContent
+
+	// If n was DocumentNode, we need to wrap newRoot
+	if n.Kind == yaml.DocumentNode {
+		newDoc := *n
+		newDoc.Content = make([]*yaml.Node, len(n.Content))
+		copy(newDoc.Content, n.Content)
+		newDoc.Content[0] = &newRoot
+		return &newDoc, comment
+	}
+
+	return &newRoot, comment
+}
+
+func encodeStream(enc *yaml.Encoder, docs []*yaml.Node) error {
+	if len(docs) == 0 {
+		return nil
+	}
+	if err := enc.Encode(docs[0]); err != nil {
+		return err
+	}
+	return encodeStream(enc, docs[1:])
 }
 
 func docRoot(n *yaml.Node) *yaml.Node {
@@ -110,39 +166,46 @@ func getArtifactHubRepo(n *yaml.Node) string {
 }
 
 func lookup(n *yaml.Node, path ...string) string {
-	cur := n
-	for _, p := range path {
-		cur = mapGet(cur, p)
-		if cur == nil {
-			return ""
-		}
+	if n == nil {
+		return ""
 	}
-	return cur.Value
+	if len(path) == 0 {
+		return n.Value
+	}
+	head, tail := path[0], path[1:]
+	return lookup(mapGet(n, head), tail...)
 }
 
 func set(n *yaml.Node, value string, path ...string) {
-	cur := n
-	for _, p := range path {
-		next := mapGet(cur, p)
-		if next == nil {
-			next = &yaml.Node{Kind: yaml.MappingNode}
-			mapSet(cur, p, next)
-		}
-		cur = next
+	if len(path) == 0 {
+		n.Value = value
+		return
 	}
-	cur.Value = value
+	head, tail := path[0], path[1:]
+	next := mapGet(n, head)
+	if next == nil {
+		next = &yaml.Node{Kind: yaml.MappingNode}
+		mapSet(n, head, next)
+	}
+	set(next, value, tail...)
 }
 
 func mapGet(n *yaml.Node, key string) *yaml.Node {
-	if n.Kind != yaml.MappingNode {
+	if n == nil || n.Kind != yaml.MappingNode {
 		return nil
 	}
-	for i := 0; i < len(n.Content); i += 2 {
-		if n.Content[i].Value == key {
-			return n.Content[i+1]
-		}
+	return findInContent(n.Content, key)
+}
+
+func findInContent(content []*yaml.Node, key string) *yaml.Node {
+	if len(content) < 2 {
+		return nil
 	}
-	return nil
+	k, v := content[0], content[1]
+	if k.Value == key {
+		return v
+	}
+	return findInContent(content[2:], key)
 }
 
 func mapSet(n *yaml.Node, key string, val *yaml.Node) {

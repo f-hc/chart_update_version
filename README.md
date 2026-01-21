@@ -30,16 +30,16 @@ Requires Go 1.25.6 or later.
 
 ```bash
 # Update all charts to latest versions
-./update-version
+./updater
 
 # Specify a custom directory
-./update-version --dir ./my-apps
+./updater --dir ./my-apps
 
 # Preview changes without modifying files (shows git diff)
-./update-version --dry-run
+./updater --dry-run
 
 # Discover charts and show what would be updated
-./update-version --check
+./updater --check
 ```
 
 ### Command-Line Flags
@@ -116,7 +116,9 @@ For files containing multiple YAML documents (separated by `---`), the tool look
 ├── yaml.go           # YAML document reading/writing with AST preservation
 ├── diff.go           # Git diff display for dry-run mode
 ├── util.go           # Logging and error handling utilities
-└── Makefile          # Build and development commands
+├── Makefile          # Build and development commands
+├── go.mod            # Go module definition
+└── go.sum            # Go module checksums
 ```
 
 ## Development
@@ -159,6 +161,7 @@ make help  # Show all available targets
 ## Dependencies
 
 - [gopkg.in/yaml.v3](https://gopkg.in/yaml.v3) - YAML parsing with AST preservation
+- [github.com/BooleanCat/go-functional/v2](https://github.com/BooleanCat/go-functional) - Functional programming helpers
 
 ## License
 

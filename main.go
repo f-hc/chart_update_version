@@ -18,92 +18,110 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+	"slices"
+	"time"
+
+	"github.com/BooleanCat/go-functional/v2/it"
 )
-
-const (
-	defaultArgoAppsDir = "argoapps"
-	argoAppsDirEnvVar          = "UPDATE_VERSION_DIR"
-)
-
-var (
-	argoAppsDir string
-	dryRun      bool
-	checkOnly   bool
-)
-
-func init() {
-	// Default value, can be overridden by env var or flag
-	argoAppsDir = defaultArgoAppsDir
-
-	// Check environment variable
-	if v := os.Getenv(argoAppsDirEnvVar); v != "" {
-		argoAppsDir = v
-	}
-
-	for i := 1; i < len(os.Args); i++ {
-		a := os.Args[i]
-
-		switch a {
-		case "--dry-run", "-n":
-			dryRun = true
-
-		case "--check", "-C":
-			checkOnly = true
-
-		case "--help", "-h":
-			printUsage()
-			os.Exit(0)
-
-		case "--dir", "-d":
-			if i+1 >= len(os.Args) {
-				fail("--dir requires a directory path")
-			}
-			argoAppsDir = os.Args[i+1]
-			i++
-
-		default:
-			if strings.HasPrefix(a, "-test.") {
-				// Skip Go test framework flags
-				continue
-			}
-			if strings.HasPrefix(a, "-") {
-				fail("unknown flag: " + a)
-			}
-		}
-	}
-
-	if dryRun && checkOnly {
-		fail("--dry-run and --check cannot be used together")
-	}
-}
 
 func main() {
-	charts, err := discoverCharts(argoAppsDir)
-	must(err)
-
-	if len(charts) == 0 {
-		fail("no charts with artifacthub comments found in " + argoAppsDir)
-	}
-
-	if checkOnly {
-		logf("discovered %d chart(s) with artifacthub comments:", len(charts))
-		for _, c := range charts {
-			logf("  %s → %s", c.File, c.Repo)
-		}
-		return
-	}
-
-	for _, c := range charts {
-		must(updateChart(c.File, c.Repo))
+	if err := run(os.Args, os.Getenv, os.Stderr); err != nil {
+		fmt.Fprintln(os.Stderr, "❌", err)
+		os.Exit(1)
 	}
 }
 
-func printUsage() {
-	exe := filepath.Base(os.Args[0])
-	fmt.Fprintf(os.Stderr, `Usage:
+func run(args []string, getEnv func(string) string, stderr io.Writer) error {
+	programName := filepath.Base(args[0])
+	flags := args[1:]
+
+	cfg, err := ParseConfig(flags, getEnv)
+	if err != nil {
+		if err.Error() == "help requested" {
+			printUsage(stderr, programName)
+			return nil
+		}
+		return err
+	}
+
+	return runApp(cfg, stderr)
+}
+
+func runApp(cfg Config, w io.Writer) error {
+	discover := MakeChartDiscoverer(os.Stat, os.ReadDir, readYAMLDocuments)
+	charts, err := discover(cfg.Dir)
+	if err != nil {
+		return err
+	}
+
+	if len(charts) == 0 {
+		return fmt.Errorf("no charts with artifacthub comments found in %s", cfg.Dir)
+	}
+
+	if cfg.CheckOnly {
+		runCheck(charts, w)
+		return nil
+	}
+
+	return runUpdate(cfg, charts, w)
+}
+
+func runCheck(charts []ChartInfo, w io.Writer) {
+	logw(w, "discovered %d chart(s) with artifacthub comments:", len(charts))
+	ForEach(slices.Values(charts), func(c ChartInfo) {
+		logw(w, "  %s → %s", c.File, c.Repo)
+	})
+}
+
+func runUpdate(cfg Config, charts []ChartInfo, w io.Writer) error {
+	const apiURL = "https://artifacthub.io/api/v1/packages/helm"
+	client := &http.Client{Timeout: 60 * time.Second}
+
+	fetcher := MakeArtifactHubFetcher(apiURL, client)
+
+	var writer YAMLWriter = writeYAMLDocuments
+	if cfg.DryRun {
+		writer = showDiffInternal
+	}
+
+	updater := MakeChartUpdater(cfg, readYAMLDocuments, fetcher, writer)
+
+	// Pipeline: Iterate -> Map(process) -> ForEach(log)
+	process := func(c ChartInfo) UpdateResult {
+		return updater(c.File, c.Repo)
+	}
+
+	return ForEachWithError(it.Map(slices.Values(charts), process), func(result UpdateResult) error {
+		return logResult(result, w)
+	})
+}
+
+func logResult(r UpdateResult, w io.Writer) error {
+	if r.Error != nil {
+		return r.Error
+	}
+
+	switch r.Status {
+	case StatusUpdated:
+		logw(w, "%s: %s → %s", r.File, r.Current, r.Latest)
+	case StatusUpToDate:
+		logw(w, "%s: already up to date (%s)", r.File, r.Current)
+	case StatusError:
+		if r.Error != nil {
+			return r.Error
+		} else {
+			return fmt.Errorf("%s: unknown error", r.File)
+		}
+	}
+	return nil
+}
+
+func printUsage(w io.Writer, exe string) {
+	_, _ = fmt.Fprintf(w, `Usage:
   %s [flags]
 
 Description:

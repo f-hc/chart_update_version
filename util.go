@@ -18,20 +18,25 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
+	"iter"
 )
 
-func logf(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "▶ "+format+"\n", a...)
+func logw(w io.Writer, format string, a ...any) {
+	_, _ = fmt.Fprintf(w, "▶ "+format+"\n", a...)
 }
 
-func must(err error) {
-	if err != nil {
-		fail(err.Error())
+func ForEach[T any](seq iter.Seq[T], action func(T)) {
+	for v := range seq {
+		action(v)
 	}
 }
 
-func fail(msg string) {
-	fmt.Fprintln(os.Stderr, "❌", msg)
-	os.Exit(1)
+func ForEachWithError[T any](seq iter.Seq[T], action func(T) error) error {
+	for v := range seq {
+		if err := action(v); err != nil {
+			return err
+		}
+	}
+	return nil
 }

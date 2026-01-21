@@ -19,6 +19,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -127,6 +128,44 @@ func TestWriteYAMLDocuments(t *testing.T) {
 
 	if len(content) == 0 {
 		t.Error("writeYAMLDocuments() wrote empty file")
+	}
+}
+
+func TestWriteYAMLDocumentsWithArtifactHub(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "output_ah.yaml")
+
+	// Create a document with artifacthub comment
+	doc := &yaml.Node{
+		Kind: yaml.DocumentNode,
+		Content: []*yaml.Node{
+			{
+				Kind: yaml.MappingNode,
+				Content: []*yaml.Node{
+					{
+						Kind:        yaml.ScalarNode,
+						Value:       "apiVersion",
+						HeadComment: "# artifacthub: org/repo",
+					},
+					{Kind: yaml.ScalarNode, Value: "v1"},
+				},
+			},
+		},
+	}
+
+	err := writeYAMLDocuments(path, []*yaml.Node{doc})
+	if err != nil {
+		t.Fatalf("writeYAMLDocuments failed: %v", err)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedPrefix := "# artifacthub: org/repo\n---\n"
+	if !strings.HasPrefix(string(content), expectedPrefix) {
+		t.Errorf("Expected prefix %q, got:\n%s", expectedPrefix, string(content))
 	}
 }
 

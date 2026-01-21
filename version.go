@@ -17,31 +17,30 @@
 package main
 
 import (
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/BooleanCat/go-functional/v2/it"
 )
 
 // versionLess returns true if a < b using semantic versioning comparison.
 func versionLess(a, b string) bool {
 	as := strings.Split(a, ".")
 	bs := strings.Split(b, ".")
+	limit := max(len(as), len(bs))
 
-	maxLen := len(as)
-	if len(bs) > maxLen {
-		maxLen = len(bs)
-	}
+	seqA := it.Chain(slices.Values(as), it.Repeat("0"))
+	seqB := it.Chain(slices.Values(bs), it.Repeat("0"))
 
-	for i := 0; i < maxLen; i++ {
-		var ai, bi int
-		if i < len(as) {
-			ai, _ = strconv.Atoi(as[i])
-		}
-		if i < len(bs) {
-			bi, _ = strconv.Atoi(bs[i])
-		}
-		if ai != bi {
-			return ai < bi
-		}
-	}
-	return false
+	valA, valB, found := it.Find2(it.Take2(it.Zip(seqA, seqB), uint(limit)), func(a, b string) bool {
+		return toInt(a) != toInt(b)
+	})
+
+	return found && toInt(valA) < toInt(valB)
+}
+
+func toInt(s string) int {
+	i, _ := strconv.Atoi(s)
+	return i
 }

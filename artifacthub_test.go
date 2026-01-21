@@ -102,12 +102,8 @@ func runArtifactHubTest(t *testing.T, response string, statusCode int, wantVer s
 	}))
 	defer server.Close()
 
-	// Override the API URL for testing
-	oldAPI := artifactHubAPI
-	defer func() { setArtifactHubAPI(oldAPI) }()
-	setArtifactHubAPI(server.URL)
-
-	ver, err := artifactHubLatestVersion("test/repo")
+	fetcher := MakeArtifactHubFetcher(server.URL, http.DefaultClient)
+	ver, err := fetcher("test/repo")
 
 	if wantErr {
 		if err == nil {
@@ -124,9 +120,4 @@ func runArtifactHubTest(t *testing.T, response string, statusCode int, wantVer s
 	if ver != wantVer {
 		t.Errorf("artifactHubLatestVersion() = %q, want %q", ver, wantVer)
 	}
-}
-
-// setArtifactHubAPI is a test helper to override the API URL
-func setArtifactHubAPI(url string) {
-	artifactHubAPI = url
 }

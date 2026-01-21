@@ -21,28 +21,46 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
-	"time"
+
+	"github.com/BooleanCat/go-functional/v2/it"
 )
 
-var artifactHubAPI = "https://artifacthub.io/api/v1/packages/helm"
-
-// httpClient is a shared HTTP client with timeout for external requests.
-var httpClient = &http.Client{Timeout: 60 * time.Second}
+// ArtifactHubVersion represents a version entry in the API response.
+type ArtifactHubVersion struct {
+	Version string `json:"version"`
+}
 
 // ArtifactHubResponse represents the API response structure.
 type ArtifactHubResponse struct {
-	AvailableVersions []struct {
-		Version string `json:"version"`
-	} `json:"available_versions"`
+	AvailableVersions []ArtifactHubVersion `json:"available_versions"`
 }
 
-// artifactHubLatestVersion fetches the latest stable version from ArtifactHub.
-func artifactHubLatestVersion(repo string) (version string, err error) {
-	resp, err := httpClient.Get(artifactHubAPI + "/" + repo)
+// VersionFetcher is a function that retrieves the latest version for a repository.
+type VersionFetcher func(repo string) (string, error)
+
+// MakeArtifactHubFetcher creates a VersionFetcher that uses the ArtifactHub API.
+func MakeArtifactHubFetcher(apiURL string, client *http.Client) VersionFetcher {
+	return func(repo string) (string, error) {
+		versions, err := fetchVersions(apiURL, client, repo)
+		if err != nil {
+			return "", err
+		}
+
+		latest, ok := findLatestStable(versions)
+		if !ok {
+			return "", errors.New("no stable versions found")
+		}
+
+		return latest, nil
+	}
+}
+
+func fetchVersions(apiURL string, client *http.Client, repo string) (versions []string, err error) {
+	resp, err := client.Get(apiURL + "/" + repo)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil && err == nil {
@@ -51,28 +69,39 @@ func artifactHubLatestVersion(repo string) (version string, err error) {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("artifacthub HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("artifacthub HTTP %d", resp.StatusCode)
 	}
 
 	var data ArtifactHubResponse
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var versions []string
-	for _, v := range data.AvailableVersions {
-		if !strings.Contains(v.Version, "-") { // skip pre-release
-			versions = append(versions, v.Version)
+	return slices.Collect(it.Map(slices.Values(data.AvailableVersions), func(v ArtifactHubVersion) string {
+		return v.Version
+	})), nil
+}
+
+func findLatestStable(versions []string) (string, bool) {
+	stable := slices.Collect(it.Filter(slices.Values(versions), isStable))
+
+	if len(stable) == 0 {
+		return "", false
+	}
+
+	latest := slices.MaxFunc(stable, func(a, b string) int {
+		if versionLess(a, b) {
+			return -1
 		}
-	}
-
-	if len(versions) == 0 {
-		return "", errors.New("no stable versions found")
-	}
-
-	sort.Slice(versions, func(i, j int) bool {
-		return versionLess(versions[i], versions[j])
+		if versionLess(b, a) {
+			return 1
+		}
+		return 0
 	})
 
-	return versions[len(versions)-1], nil
+	return latest, true
+}
+
+func isStable(v string) bool {
+	return !strings.Contains(v, "-")
 }

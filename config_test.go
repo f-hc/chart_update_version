@@ -72,7 +72,7 @@ func TestDiscoverCharts(t *testing.T) {
 		{
 			name: "mixed files",
 			files: map[string]string{
-				testAppFile:    testAppContent,
+				testAppFile:   testAppContent,
 				"deploy.yaml": "kind: Deployment",
 				"secret.yaml": "kind: Secret",
 			},
@@ -103,7 +103,8 @@ func TestDiscoverCharts(t *testing.T) {
 
 			createTestFiles(t, testDir, tt.files)
 
-			charts, err := discoverCharts(testDir)
+			discover := MakeChartDiscoverer(os.Stat, os.ReadDir, readYAMLDocuments)
+			charts, err := discover(testDir)
 			if err != nil {
 				t.Errorf("discoverCharts() error = %v", err)
 				return
@@ -143,8 +144,10 @@ func checkDiscoveredCharts(t *testing.T, got []ChartInfo, wantCount int, wantCha
 }
 
 func TestDiscoverChartsErrors(t *testing.T) {
+	discover := MakeChartDiscoverer(os.Stat, os.ReadDir, readYAMLDocuments)
+
 	t.Run("nonexistent directory", func(t *testing.T) {
-		_, err := discoverCharts("/nonexistent/path")
+		_, err := discover("/nonexistent/path")
 		if err == nil {
 			t.Error("discoverCharts() error = nil, want error")
 		}
@@ -156,7 +159,7 @@ func TestDiscoverChartsErrors(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, err := discoverCharts(tmpFile)
+		_, err := discover(tmpFile)
 		if err == nil {
 			t.Error("discoverCharts() error = nil, want error for file path")
 		}
@@ -203,7 +206,7 @@ func TestExtractArtifactHubRepo(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got, err := extractArtifactHubRepo(path)
+			got, err := extractArtifactHubRepo(readYAMLDocuments, path)
 			if err != nil {
 				t.Errorf("extractArtifactHubRepo() error = %v", err)
 				return
@@ -211,6 +214,125 @@ func TestExtractArtifactHubRepo(t *testing.T) {
 
 			if got != tt.want {
 				t.Errorf("extractArtifactHubRepo() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		env     map[string]string
+		want    Config
+		wantErr bool
+	}{
+		{
+			name: "defaults",
+			args: []string{},
+			want: Config{
+				Dir: defaultArgoAppsDir,
+			},
+		},
+		{
+			name: "env var override",
+			env: map[string]string{
+				argoAppsDirEnvVar: "custom/dir",
+			},
+			args: []string{},
+			want: Config{
+				Dir: "custom/dir",
+			},
+		},
+		{
+			name: "flag override",
+			args: []string{"--dir", "flag/dir"},
+			want: Config{
+				Dir: "flag/dir",
+			},
+		},
+		{
+			name: "flag overrides env var",
+			env: map[string]string{
+				argoAppsDirEnvVar: "env/dir",
+			},
+			args: []string{"--dir", "flag/dir"},
+			want: Config{
+				Dir: "flag/dir",
+			},
+		},
+		{
+			name: "dry run short",
+			args: []string{"-n"},
+			want: Config{
+				Dir:    defaultArgoAppsDir,
+				DryRun: true,
+			},
+		},
+		{
+			name: "dry run long",
+			args: []string{"--dry-run"},
+			want: Config{
+				Dir:    defaultArgoAppsDir,
+				DryRun: true,
+			},
+		},
+		{
+			name: "check short",
+			args: []string{"-C"},
+			want: Config{
+				Dir:       defaultArgoAppsDir,
+				CheckOnly: true,
+			},
+		},
+		{
+			name: "check long",
+			args: []string{"--check"},
+			want: Config{
+				Dir:       defaultArgoAppsDir,
+				CheckOnly: true,
+			},
+		},
+		{
+			name:    "dry run and check incompatible",
+			args:    []string{"--dry-run", "--check"},
+			wantErr: true,
+		},
+		{
+			name:    "missing dir argument",
+			args:    []string{"--dir"},
+			wantErr: true,
+		},
+		{
+			name:    "unknown flag",
+			args:    []string{"--unknown"},
+			wantErr: true,
+		},
+		{
+			name: "ignore test flags",
+			args: []string{"-test.v"},
+			want: Config{
+				Dir: defaultArgoAppsDir,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			getEnv := func(key string) string {
+				if tt.env == nil {
+					return ""
+				}
+				return tt.env[key]
+			}
+
+			got, err := ParseConfig(tt.args, getEnv)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseConfig() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("ParseConfig() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

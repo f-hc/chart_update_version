@@ -37,10 +37,8 @@ func showDiffInternal(path string, docs []*yaml.Node) (err error) {
 	enc := yaml.NewEncoder(tmp)
 	enc.SetIndent(2)
 
-	for _, d := range docs {
-		if err := enc.Encode(d); err != nil {
-			return err
-		}
+	if err := encodeStream(enc, docs); err != nil {
+		return err
 	}
 	if err := enc.Close(); err != nil {
 		return err
