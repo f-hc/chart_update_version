@@ -22,7 +22,7 @@ GO := go
 all: build-all
 
 build: ## Build binary for current platform
-	$(GO) build -o $(BINARY) .
+	$(GO) build -ldflags '-s -w' -trimpath -o $(BINARY) .
 
 clean: ## Remove built binaries
 	rm -f $(BINARY) $(BINARY)-*
@@ -30,16 +30,16 @@ clean: ## Remove built binaries
 build-all: build-darwin build-linux build-freebsd ## Build binaries for all platforms
 
 build-darwin: ## Build binaries for macOS (amd64, arm64)
-	GOOS=darwin GOARCH=amd64 $(GO) build -o $(BINARY)-darwin-amd64 .
-	GOOS=darwin GOARCH=arm64 $(GO) build -o $(BINARY)-darwin-arm64 .
+	GOOS=darwin GOARCH=amd64 $(GO) build -ldflags '-s -w' -trimpath -o $(BINARY)-darwin-amd64 .
+	GOOS=darwin GOARCH=arm64 $(GO) build -ldflags '-s -w' -trimpath -o $(BINARY)-darwin-arm64 .
 
 build-linux: ## Build binaries for Linux (amd64, arm64)
-	GOOS=linux GOARCH=amd64 $(GO) build -o $(BINARY)-linux-amd64 .
-	GOOS=linux GOARCH=arm64 $(GO) build -o $(BINARY)-linux-arm64 .
+	GOOS=linux GOARCH=amd64 $(GO) build -ldflags '-s -w' -trimpath -o $(BINARY)-linux-amd64 .
+	GOOS=linux GOARCH=arm64 $(GO) build -ldflags '-s -w' -trimpath -o $(BINARY)-linux-arm64 .
 
 build-freebsd: ## Build binaries for FreeBSD (amd64, arm64)
-	GOOS=freebsd GOARCH=amd64 $(GO) build -o $(BINARY)-freebsd-amd64 .
-	GOOS=freebsd GOARCH=arm64 $(GO) build -o $(BINARY)-freebsd-arm64 .
+	GOOS=freebsd GOARCH=amd64 $(GO) build -ldflags '-s -w' -trimpath -o $(BINARY)-freebsd-amd64 .
+	GOOS=freebsd GOARCH=arm64 $(GO) build -ldflags '-s -w' -trimpath -o $(BINARY)-freebsd-arm64 .
 
 test: ## Run tests
 	$(GO) test -v ./...
