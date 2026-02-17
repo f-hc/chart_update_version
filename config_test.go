@@ -26,6 +26,7 @@ const (
 	testAppFile    = "app.yaml"
 	testChartRepo  = "org/chart"
 	testAppContent = "# artifacthub: " + testChartRepo + "\nkind: Application"
+	testFlagDir    = "flag/dir"
 )
 
 func TestDiscoverCharts(t *testing.T) {
@@ -267,10 +268,10 @@ func TestParseConfig(t *testing.T) {
 		},
 		{
 			name: "flag override",
-			args: []string{"--dir", "flag/dir"},
+			args: []string{"--dir", testFlagDir},
 			env:  nil,
 			want: Config{
-				Dir:       "flag/dir",
+				Dir:       testFlagDir,
 				DryRun:    false,
 				CheckOnly: false,
 			},
@@ -281,9 +282,9 @@ func TestParseConfig(t *testing.T) {
 			env: map[string]string{
 				argoAppsDirEnvVar: "env/dir",
 			},
-			args: []string{"--dir", "flag/dir"},
+			args: []string{"--dir", testFlagDir},
 			want: Config{
-				Dir:       "flag/dir",
+				Dir:       testFlagDir,
 				DryRun:    false,
 				CheckOnly: false,
 			},
