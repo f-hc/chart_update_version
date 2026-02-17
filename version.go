@@ -28,7 +28,6 @@ import (
 func versionLess(a, b string) bool {
 	as := strings.Split(a, ".")
 	bs := strings.Split(b, ".")
-	//nolint:gosec // lengths of slices are non-negative, overflow is not possible here
 	limit := uint(max(len(as), len(bs)))
 
 	seqA := it.Chain(slices.Values(as), it.Repeat("0"))

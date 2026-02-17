@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,7 +122,7 @@ func TestWriteYAMLDocuments(t *testing.T) {
 		},
 	}
 
-	err := writeYAMLDocuments(context.Background(), path, []*yaml.Node{doc})
+	err := writeYAMLDocuments(context.Background(), io.Discard, path, []*yaml.Node{doc})
 	if err != nil {
 		t.Errorf("writeYAMLDocuments() error = %v", err)
 		return
@@ -161,7 +162,7 @@ func TestWriteYAMLDocumentsWithArtifactHub(t *testing.T) {
 		},
 	}
 
-	err := writeYAMLDocuments(context.Background(), path, []*yaml.Node{doc})
+	err := writeYAMLDocuments(context.Background(), io.Discard, path, []*yaml.Node{doc})
 	if err != nil {
 		t.Fatalf("writeYAMLDocuments failed: %v", err)
 	}

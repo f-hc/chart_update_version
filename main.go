@@ -101,7 +101,7 @@ func runUpdate(cfg Config, charts []ChartInfo, w io.Writer) error {
 
 	// Pipeline: Iterate -> Map(process) -> ForEach(log)
 	process := func(c ChartInfo) UpdateResult {
-		return updater(ctx, c.File, c.Repo)
+		return updater(ctx, w, c.File, c.Repo)
 	}
 
 	return ForEachWithError(it.Map(slices.Values(charts), process), func(result UpdateResult) error {
@@ -131,9 +131,9 @@ func logResult(r UpdateResult, w io.Writer) error {
 }
 
 func printUsage(w io.Writer, exe string) {
-	_, _ = fmt.Fprintf(w, `Usage:
-  %s [flags]
-
+	_, _ = fmt.Fprintf(w, "Usage:\n  %s [flags]\n", exe) //nolint:gosec // CLI tool usage message
+	//nolint:gosec // CLI tool usage message
+	_, _ = io.WriteString(w, `
 Description:
   Updates Argo CD Application Helm chart versions by scanning for manifests
   with "# artifacthub: org/repo" comments and fetching the latest version
@@ -143,23 +143,23 @@ License:
   GNU GPL v3.0 only - https://spdx.org/licenses/GPL-3.0-only.html
 
 Flags:
-  -d, --dir <path>    Path to argoapps directory (default: %s)
+  -d, --dir <path>    Path to argoapps directory (default: `+defaultArgoAppsDir+`)
   -n, --dry-run       Show git diff without modifying files
   -C, --check         Discover charts and show what would be updated
   -h, --help          Show this help message
 
 Environment:
-  %s    Directory path (used if --dir is not provided)
+  `+argoAppsDirEnvVar+`    Directory path (used if --dir is not provided)
 
 Exit codes:
   0  Success
   1  Error
 
 Examples:
-  %s
-  %s --dir ./my-apps
-  %s --dry-run
-  %s=./my-apps %s --check
+  `+exe+`
+  `+exe+` --dir ./my-apps
+  `+exe+` --dry-run
+  `+argoAppsDirEnvVar+`=./my-apps `+exe+` --check
 
-`, exe, defaultArgoAppsDir, argoAppsDirEnvVar, exe, exe, exe, argoAppsDirEnvVar, exe)
+`)
 }

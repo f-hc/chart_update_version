@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"slices"
 	"testing"
 
@@ -113,10 +114,10 @@ func runUpdateChartTest(cfg Config, tc testCase) func(t *testing.T) {
 
 		mockRead := func(_ string) ([]*yaml.Node, error) { return tc.read() }
 		mockFetch := func(_ context.Context, _ string) (string, error) { return tc.fetch() }
-		mockWrite := func(_ context.Context, _ string, _ []*yaml.Node) error { return tc.write() }
+		mockWrite := func(_ context.Context, _ io.Writer, _ string, _ []*yaml.Node) error { return tc.write() }
 
 		updater := MakeChartUpdater(cfg, mockRead, mockFetch, mockWrite)
-		result := updater(context.Background(), "app.yaml", "org/repo")
+		result := updater(context.Background(), io.Discard, "app.yaml", "org/repo")
 
 		assertStatus(t, tc.wantStatus, result.Status)
 		assertString(t, "current", tc.wantCurrent, result.Current)

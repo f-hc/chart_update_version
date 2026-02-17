@@ -59,12 +59,20 @@ func MakeArtifactHubFetcher(apiURL string, client *http.Client) VersionFetcher {
 }
 
 func fetchVersions(ctx context.Context, apiURL string, client *http.Client, repo string) ([]string, error) {
+	if !strings.HasPrefix(apiURL, "https://artifacthub.io/api/") && !strings.HasPrefix(apiURL, "http://127.0.0.1") {
+		return nil, fmt.Errorf("invalid artifacthub API URL: %s", apiURL)
+	}
+
+	if strings.Contains(repo, "..") || strings.Contains(repo, "?") || strings.Contains(repo, "#") {
+		return nil, fmt.Errorf("invalid repository name: %s", repo)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL+"/"+repo, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) // #nosec G704
 	if err != nil {
 		return nil, fmt.Errorf("fetch versions from artifacthub: %w", err)
 	}

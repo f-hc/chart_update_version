@@ -23,7 +23,9 @@ import (
 )
 
 func logwf(w io.Writer, format string, a ...any) {
-	_, _ = fmt.Fprintf(w, "▶ "+format+"\n", a...)
+	_, _ = fmt.Fprint(w, "▶ ")
+	_, _ = fmt.Fprintf(w, format, a...) // #nosec G705
+	_, _ = fmt.Fprintln(w)
 }
 
 func ForEach[T any](seq iter.Seq[T], action func(T)) {

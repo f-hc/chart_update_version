@@ -17,55 +17,63 @@
 package main
 
 import (
+	"bytes"
 	"context"
-	"errors"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
+	"path/filepath"
 
+	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff/myers"
+	"github.com/hexops/gotextdiff/span"
 	"gopkg.in/yaml.v3"
 )
 
-func showDiffInternal(ctx context.Context, path string, docs []*yaml.Node) (err error) {
-	tmp, err := os.CreateTemp("", "update-version-*.yaml")
+func showDiffInternal(_ context.Context, w io.Writer, path string, docs []*yaml.Node) error {
+	// 1. Read original file
+	origBytes, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // CLI tool reads user-provided paths
 	if err != nil {
-		return fmt.Errorf("create temporary file: %w", err)
+		return fmt.Errorf("read original file: %w", err)
 	}
 
-	defer func() {
-		if removeErr := os.Remove(tmp.Name()); removeErr != nil && err == nil {
-			err = removeErr
-		}
-	}()
+	orig := string(origBytes)
 
-	enc := yaml.NewEncoder(tmp)
+	// 2. Generate new content in memory
+	var buf bytes.Buffer
+
+	nodes := docs
+	if len(docs) > 0 {
+		first, comment := extractComment(docs[0])
+		if comment != "" {
+			if _, err = fmt.Fprintf(&buf, "%s\n---\n", comment); err != nil { //nolint:gosec // false positive
+				return fmt.Errorf("write yaml comment to buffer: %w", err)
+			}
+
+			nodes = append([]*yaml.Node{first}, docs[1:]...)
+		}
+	}
+
+	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(yamlIndent)
 
-	if err = encodeStream(enc, docs); err != nil {
-		return err
+	if err = encodeStream(enc, nodes); err != nil {
+		return fmt.Errorf("encode yaml to buffer: %w", err)
 	}
 
 	if err = enc.Close(); err != nil {
 		return fmt.Errorf("close encoder: %w", err)
 	}
 
-	if err = tmp.Close(); err != nil {
-		return fmt.Errorf("close temporary file: %w", err)
-	}
+	newContent := buf.String()
 
-	//nolint:gosec // path is validated to be within base directory in config.go
-	cmd := exec.CommandContext(ctx, "git", "diff", "--no-index", "--", path, tmp.Name())
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// 3. Compute diff
+	edits := myers.ComputeEdits(span.URIFromPath(path), orig, newContent)
 
-	if err = cmd.Run(); err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			return nil // git diff returns 1 when files differ
-		}
-
-		return fmt.Errorf("run git diff: %w", err)
-	}
+	// 4. Print diff
+	// Use "a/" and "b/" prefixes to mimic git diff output
+	diff := fmt.Sprint(gotextdiff.ToUnified("a/"+path, "b/"+path, orig, edits))
+	fmt.Fprint(w, diff) //nolint:gosec // false positive for CLI tool
 
 	return nil
 }

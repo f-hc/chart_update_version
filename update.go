@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"path/filepath"
 	"slices"
 
@@ -45,7 +46,7 @@ type UpdateResult struct {
 
 type (
 	YAMLReader func(path string) ([]*yaml.Node, error)
-	YAMLWriter func(ctx context.Context, path string, docs []*yaml.Node) error
+	YAMLWriter func(ctx context.Context, w io.Writer, path string, docs []*yaml.Node) error
 )
 
 func MakeChartUpdater(
@@ -53,8 +54,8 @@ func MakeChartUpdater(
 	read YAMLReader,
 	fetch VersionFetcher,
 	write YAMLWriter,
-) func(ctx context.Context, file, repo string) UpdateResult {
-	return func(ctx context.Context, file, repo string) UpdateResult {
+) func(ctx context.Context, w io.Writer, file, repo string) UpdateResult {
+	return func(ctx context.Context, w io.Writer, file, repo string) UpdateResult {
 		path := filepath.Join(cfg.Dir, file)
 
 		docs, err := read(path)
@@ -85,7 +86,7 @@ func MakeChartUpdater(
 
 		updateDocuments(docs, latest)
 
-		if writeErr := write(ctx, path, docs); writeErr != nil {
+		if writeErr := write(ctx, w, path, docs); writeErr != nil {
 			return newErrorResultWithVersions(file, repo, current, latest, writeErr)
 		}
 

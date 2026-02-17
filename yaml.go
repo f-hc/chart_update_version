@@ -22,13 +22,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 func readYAMLDocuments(path string) ([]*yaml.Node, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path)) // #nosec G703
 	if err != nil {
 		return nil, fmt.Errorf("open yaml file: %w", err)
 	}
@@ -70,8 +71,8 @@ const (
 	KindApplication   = "Application"
 )
 
-func writeYAMLDocuments(_ context.Context, path string, docs []*yaml.Node) error {
-	f, err := os.Create(path)
+func writeYAMLDocuments(_ context.Context, _ io.Writer, path string, docs []*yaml.Node) error {
+	f, err := os.Create(filepath.Clean(path))
 	if err != nil {
 		return fmt.Errorf("create yaml file: %w", err)
 	}
